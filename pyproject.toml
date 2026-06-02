@@ -33,16 +33,18 @@ dependencies = [
 ]
 requires-python = "~=3.13.0"
 
+[tool.flit.module]
+name = "src"
 
 [tool.ruff]
 line-length = 99
-src = ["bm_25_search_engine_with_sentiment_filtering"]
-include = ["pyproject.toml", "bm_25_search_engine_with_sentiment_filtering/**/*.py"]
+src = ["src"]
+include = ["pyproject.toml", "src/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = ["I"]  # Add import sorting
 
 [tool.ruff.lint.isort]
-known-first-party = ["bm_25_search_engine_with_sentiment_filtering"]
+known-first-party = ["src"]
 force-sort-within-sections = true
 

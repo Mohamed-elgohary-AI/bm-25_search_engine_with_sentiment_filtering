@@ -1,0 +1,9 @@
+defaults:
+  - data: amzn
+
+paths:
+model_path: models/
+reports_path: reports
+preprocessor_path: models/preprocessor.pkl
+
+experiment_name: my_experiment
