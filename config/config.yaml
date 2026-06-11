@@ -1,5 +1,6 @@
 defaults:
-  - data: amzn
+#make multiple datasets in the config/data directory
+- data: [amzn, sent140]
 
 paths:
 model_path: models/

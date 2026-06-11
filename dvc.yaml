@@ -1,0 +1,12 @@
+stages:
+  download_datasets:
+    cmd: uv run python -m src.dataset
+    params:
+    - config/data/amzn.yaml:
+      - dataset_name
+      - raw_data_path
+    - config/data/sent140.yaml:
+      - dataset_name
+      - raw_data_path
+    outs:
+    - data/raw

@@ -1,7 +1,6 @@
-dataset_name: snap/amazon-fine-food-reviews
+dataset_name: kazanova/sentiment140
 raw_data_path: data/raw
 processed_data_path: data/processed
-file_name: Reviews.csv
+file_name: training.1600000.processed.noemoticon.csv
 test_size: 0.15
 random_state: 42
-

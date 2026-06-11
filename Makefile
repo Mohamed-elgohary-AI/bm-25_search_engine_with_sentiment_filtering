@@ -81,3 +81,24 @@ export PRINT_HELP_PYSCRIPT
 
 help:
 	@$(PYTHON_INTERPRETER) -c "${PRINT_HELP_PYSCRIPT}" < $(MAKEFILE_LIST)
+
+setup-pipeline:
+	./setup_pipeline.sh
+
+run-pipeline:
+	uv run dvc repro
+
+dag:
+	uv run dvc dag
+
+status:
+	uv run dvc status
+
+push:
+	git push && uv run dvc push
+
+clean:
+	rm -rf models/ reports/ data/processed/ data/raw/
+
+install:
+	uv sync
