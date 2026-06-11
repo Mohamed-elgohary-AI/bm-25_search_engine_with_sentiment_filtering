@@ -1,7 +1,7 @@
 defaults:
 #make multiple datasets in the config/data directory
 - data: [amzn, sent140]
-
+- models: bm25
 paths:
 model_path: models/
 reports_path: reports

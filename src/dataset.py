@@ -15,23 +15,26 @@ from src.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
 
 app = typer.Typer()
 
+
 def validate_input_path(path: Path) -> Path:
-    '''Validate input paths.'''
+    """Validate input paths."""
     if not path.exists():
         raise typer.BadParameter(f"Input path {path} does not exist.")
     return path
 
+
 def validate_output_path(path: Path) -> Path:
-    '''Validate output paths.'''
+    """Validate output paths."""
     if not path.parent.exists():
         raise typer.BadParameter(f"Output directory {path.parent} does not exist.")
     return path
 
+
 def validate_paths(input_path: Path, output_path: Path) -> None:
-    '''Validate input and output paths.'''
+    """Validate input and output paths."""
     validate_input_path(input_path)
     validate_output_path(output_path)
-    
+
 
 def download_dataset(url: str, data_cfg: DictConfig, cfg: DictConfig, output_path: Path) -> None:
     logger.info(f"Downloading dataset from {url} to {output_path}...")
@@ -60,11 +63,10 @@ def download_dataset(url: str, data_cfg: DictConfig, cfg: DictConfig, output_pat
 
     logger.success("Dataset downloaded successfully.")
 
+
 @hydra.main(config_path="../config", config_name="config")
-def main(
-    cfg: DictConfig
-) -> None:
-    '''Main function to download the dataset.'''
+def main(cfg: DictConfig) -> None:
+    """Main function to download the dataset."""
 
     data_config_dir = Path(get_original_cwd()) / "config" / "data"
     dataset_configs = []
@@ -77,6 +79,7 @@ def main(
 
     for data_cfg in dataset_configs:
         download_dataset(data_cfg.dataset_name, data_cfg, cfg, RAW_DATA_DIR)
+
 
 if __name__ == "__main__":
     main()

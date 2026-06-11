@@ -5,13 +5,58 @@ stages:
     params:
       config/data/amzn.yaml:
         dataset_name: snap/amazon-fine-food-reviews
-        raw_data_path: data/raw
       config/data/sent140.yaml:
         dataset_name: kazanova/sentiment140
-        raw_data_path: data/raw
     outs:
     - path: data/raw
       hash: md5
       md5: 8644b753637def768f307c49f912aa76.dir
       size: 539708505
       nfiles: 2
+  preprocess:
+    cmd: uv run python -m src.preprocessor
+    deps:
+    - path: data/raw/Reviews.csv
+      hash: md5
+      md5: c3c950ae0be8b0736477c89d052d33fd
+      size: 300904694
+    - path: data/raw/training.1600000.processed.noemoticon.csv
+      hash: md5
+      md5: df952449d6f9b5f9fdfe3fc53ddef7ca
+      size: 238803811
+    - path: src/preprocessor.py
+      hash: md5
+      md5: 7243d0c52ef279cfd11d966edd2451e2
+      size: 1983
+    outs:
+    - path: data/processed/reviews.parquet
+      hash: md5
+      md5: f1a422627694b3af26486ecc0d9835f2
+      size: 3512381
+  build_index:
+    cmd: uv run python -m src.pipelines.build_index
+    deps:
+    - path: data/processed/reviews.parquet
+      hash: md5
+      md5: f1a422627694b3af26486ecc0d9835f2
+      size: 3512381
+    params:
+      config/models/bm25.yaml:
+        b: 0.75
+        k1: 1.5
+    outs:
+    - path: models/bm25_index.pkl
+      hash: md5
+      md5: aa820a940b4367a917624dff5269c564
+      size: 4304764
+    - path: reports/metrics.json
+      hash: md5
+      md5: bbf5ec7e824d3269c35afdb3d8278a15
+      size: 48
+  evaluate:
+    cmd: uv run python -m src.pipelines.evaluate
+    deps:
+    - path: models/bm25_index.pkl
+      hash: md5
+      md5: aa820a940b4367a917624dff5269c564
+      size: 4304764
