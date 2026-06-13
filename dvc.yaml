@@ -14,18 +14,17 @@ stages:
     deps:
     - data/raw/Reviews.csv
     - data/raw/training.1600000.processed.noemoticon.csv
-    - src/preprocessor.py
     outs:
     - data/processed/reviews.parquet
 
   build_index:
-    cmd: uv run python -m src.pipelines.build_index models=bm25
+    cmd: uv run python -m src.pipelines.build_index model=bm25
     deps:
     - data/processed/reviews.parquet
     outs:
     - models/bm25_index.pkl
     params:
-    - config/models/bm25.yaml:
+    - config/model/bm25.yaml:
       - k1
       - b
     metrics:
@@ -36,4 +35,19 @@ stages:
     deps:
     - models/bm25_index.pkl
 
-
+  train_bert:
+    cmd: uv run python -m src.modeling.train model=bert
+    deps:
+    - data/processed/reviews.parquet
+    params:
+    - config/model/bert.yaml:
+      - model_name
+      - num_labels
+      - max_length
+      - batch_size
+      - epochs
+      - learning_rate
+      - sample_size
+      - train_split
+    outs:
+    - models/bert-sentiment

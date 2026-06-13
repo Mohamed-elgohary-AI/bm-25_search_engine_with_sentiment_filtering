@@ -24,24 +24,20 @@ stages:
       hash: md5
       md5: df952449d6f9b5f9fdfe3fc53ddef7ca
       size: 238803811
-    - path: src/preprocessor.py
-      hash: md5
-      md5: b33c3ab1548ce148e624aca583fec62d
-      size: 2247
     outs:
     - path: data/processed/reviews.parquet
       hash: md5
       md5: f1a422627694b3af26486ecc0d9835f2
       size: 3512381
   build_index:
-    cmd: uv run python -m src.pipelines.build_index models=bm25
+    cmd: uv run python -m src.pipelines.build_index model=bm25
     deps:
     - path: data/processed/reviews.parquet
       hash: md5
       md5: f1a422627694b3af26486ecc0d9835f2
       size: 3512381
     params:
-      config/models/bm25.yaml:
+      config/model/bm25.yaml:
         b: 0.75
         k1: 1.5
     outs:
@@ -60,3 +56,26 @@ stages:
       hash: md5
       md5: aa820a940b4367a917624dff5269c564
       size: 4304764
+  train_bert:
+    cmd: uv run python -m src.modeling.train model=bert
+    deps:
+    - path: data/processed/reviews.parquet
+      hash: md5
+      md5: f1a422627694b3af26486ecc0d9835f2
+      size: 3512381
+    params:
+      config/model/bert.yaml:
+        batch_size: 32
+        epochs: 1
+        learning_rate: 2e-05
+        max_length: 128
+        model_name: distilbert-base-uncased
+        num_labels: 3
+        sample_size: 5000
+        train_split: 0.8
+    outs:
+    - path: models/bert-sentiment
+      hash: md5
+      md5: eea3aabe195f55da57ff0bdbb62f97e5.dir
+      size: 268548492
+      nfiles: 4

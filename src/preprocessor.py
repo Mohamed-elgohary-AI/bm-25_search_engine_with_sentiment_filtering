@@ -41,7 +41,6 @@ def load_and_clean(sample=None):
 
     # Combine Summary + Text as the searchable document
     df["document"] = df["Summary"].fillna("") + " " + df["Text"]
-    df = df[:5000]  # for testing purposes, remove later
     print(f"Cleaning {len(df):,} documents...")
     tqdm.pandas(desc="Cleaning text")
     df["document_clean"] = df["document"].progress_apply(clean_text)

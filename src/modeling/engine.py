@@ -41,7 +41,7 @@ class SearchEngine:
             results.append(
                 {
                     "score": float(scores[idx]),
-                    "text": self.corpus_raw[idx][:300],  # truncate for display
+                    "text": self.corpus_raw[idx][:300], 
                     "product_id": meta["ProductId"],
                     "rating": meta["Score"],
                     "sentiment": meta["sentiment"],

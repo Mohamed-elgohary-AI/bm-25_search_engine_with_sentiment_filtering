@@ -19,19 +19,17 @@ def build_index(cfg: DictConfig):
     corpus_clean = df["document_clean"].tolist()
     tokenized_corpus = [doc.split() for doc in corpus_clean]
 
-    print(cfg.models)
-
     with mlflow.start_run(run_name="build_bm25_index"):
         mlflow.log_params(
             {
-                "k1": cfg.models.k1,
-                "b": cfg.models.b,
+                "k1": cfg.model.k1,
+                "b": cfg.model.b,
                 "corpus_size": len(df),
                 "dataset": "amazon-fine-food-reviews",
             }
         )
 
-        bm25 = BM25Okapi(tokenized_corpus, k1=cfg.models.k1, b=cfg.models.b)
+        bm25 = BM25Okapi(tokenized_corpus, k1=cfg.model.k1, b=cfg.model.b)
 
         # Save index + metadata together
         artifact = {
@@ -71,4 +69,3 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     main()  # pylint: disable=no-value-for-parameter
- 
