@@ -19,7 +19,7 @@ stages:
     - data/processed/reviews.parquet
 
   build_index:
-    cmd: uv run python -m src.pipelines.build_index model=bm25
+    cmd: uv run python -m src.pipelines.build_index models=bm25
     deps:
     - data/processed/reviews.parquet
     outs:

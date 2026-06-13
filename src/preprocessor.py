@@ -48,7 +48,9 @@ def load_and_clean(sample=None):
 
     if sample:
         df = df.sample(sample, random_state=42)
-
+    if not PROCESSED_DATA_DIR.exists():
+        PROCESSED_DATA_DIR.mkdir(parents=True)
+        
     df.to_parquet(PROCESSED_DATA_DIR / "reviews.parquet", index=False)
     print(f"Saved {len(df)} clean reviews.")
     return df

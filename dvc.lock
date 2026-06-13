@@ -26,15 +26,15 @@ stages:
       size: 238803811
     - path: src/preprocessor.py
       hash: md5
-      md5: 7243d0c52ef279cfd11d966edd2451e2
-      size: 1983
+      md5: b33c3ab1548ce148e624aca583fec62d
+      size: 2247
     outs:
     - path: data/processed/reviews.parquet
       hash: md5
       md5: f1a422627694b3af26486ecc0d9835f2
       size: 3512381
   build_index:
-    cmd: uv run python -m src.pipelines.build_index
+    cmd: uv run python -m src.pipelines.build_index models=bm25
     deps:
     - path: data/processed/reviews.parquet
       hash: md5
