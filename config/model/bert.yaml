@@ -1,8 +1,8 @@
-model_name: distilbert-base-uncased
+model_name: google/bert_uncased_L-2_H-128_A-2
 num_labels: 3
-max_length: 128
+max_length: 256
 batch_size: 32    
 epochs: 1   
 learning_rate: 2e-5
 train_split: 0.8
-sample_size: 5000      
+sample_size: 50000      

@@ -1,3 +1,4 @@
+import json
 import os
 from os import path
 from pathlib import Path
@@ -48,7 +49,7 @@ class ReviewDataset(Dataset):
 
 
 def load_data(sample=50_000):
-    df = pd.read_parquet(PROCESSED_DATA_DIR / "reviews.parquet")[
+    df = pd.read_parquet(PROCESSED_DATA_DIR / "reviews_train.parquet")[
         ["Text", "Score"]
     ].dropna()
     df["label"] = df["Score"].map({1: 0, 2: 0, 3: 1, 4: 2, 5: 2})
@@ -154,6 +155,21 @@ def train(cfg: DictConfig):
         mlflow.log_artifacts(
             str(MODELS_DIR / "bert-sentiment"), artifact_path="bert-sentiment"
         )
+        reports_dir = Path("reports/bert")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        metrics = {
+            "val_acc": avg_val_accuracy,
+            "train_loss": avg_train_loss,
+            "epochs": cfg.model.epochs,
+            "model_name": cfg.model.model_name,
+        }
+
+        metrics_path = reports_dir / "metrics_bert.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=2)
+
+        mlflow.log_artifacts(str(reports_dir), artifact_path="reports/bert")
         logger.success(f"Model saved to {MODELS_DIR / 'bert-sentiment'}")
 
 

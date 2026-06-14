@@ -27,15 +27,23 @@ stages:
     outs:
     - path: data/processed/reviews.parquet
       hash: md5
-      md5: f1a422627694b3af26486ecc0d9835f2
-      size: 3512381
+      md5: 210f285be2fb5af393ef1cd2c511dd4c
+      size: 288899090
+    - path: data/processed/reviews_test.parquet
+      hash: md5
+      md5: bb32a1ef86bfe9f4adcf936058040710
+      size: 61091673
+    - path: data/processed/reviews_train.parquet
+      hash: md5
+      md5: 4dece810e15cbf3bea882aa9d6809036
+      size: 243362685
   build_index:
     cmd: uv run python -m src.pipelines.build_index model=bm25
     deps:
     - path: data/processed/reviews.parquet
       hash: md5
-      md5: f1a422627694b3af26486ecc0d9835f2
-      size: 3512381
+      md5: 210f285be2fb5af393ef1cd2c511dd4c
+      size: 288899090
     params:
       config/model/bm25.yaml:
         b: 0.75
@@ -43,39 +51,39 @@ stages:
     outs:
     - path: models/bm25_index.pkl
       hash: md5
-      md5: aa820a940b4367a917624dff5269c564
-      size: 4304764
+      md5: c9517850f6adf6ab590cd1af8dc0da71
+      size: 344563916
     - path: reports/metrics.json
       hash: md5
-      md5: bbf5ec7e824d3269c35afdb3d8278a15
-      size: 48
+      md5: e37118c119d9e846482996192e1780ee
+      size: 61
   evaluate:
     cmd: uv run python -m src.pipelines.evaluate
     deps:
     - path: models/bm25_index.pkl
       hash: md5
-      md5: aa820a940b4367a917624dff5269c564
-      size: 4304764
+      md5: c9517850f6adf6ab590cd1af8dc0da71
+      size: 344563916
   train_bert:
     cmd: uv run python -m src.modeling.train model=bert
     deps:
     - path: data/processed/reviews.parquet
       hash: md5
-      md5: f1a422627694b3af26486ecc0d9835f2
-      size: 3512381
+      md5: 210f285be2fb5af393ef1cd2c511dd4c
+      size: 288899090
     params:
       config/model/bert.yaml:
         batch_size: 32
         epochs: 1
         learning_rate: 2e-05
-        max_length: 128
-        model_name: distilbert-base-uncased
+        max_length: 256
+        model_name: google/bert_uncased_L-2_H-128_A-2
         num_labels: 3
-        sample_size: 5000
+        sample_size: 50000
         train_split: 0.8
     outs:
     - path: models/bert-sentiment
       hash: md5
-      md5: eea3aabe195f55da57ff0bdbb62f97e5.dir
-      size: 268548492
+      md5: a2d0fc481ea1055f3612e9ab189f2b2f.dir
+      size: 18262800
       nfiles: 4

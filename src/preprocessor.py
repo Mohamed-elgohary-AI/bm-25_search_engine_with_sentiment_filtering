@@ -7,6 +7,7 @@ from loguru import logger
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from omegaconf import DictConfig
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from src.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
@@ -41,7 +42,7 @@ def load_and_clean(sample=None):
 
     # Combine Summary + Text as the searchable document
     df["document"] = df["Summary"].fillna("") + " " + df["Text"]
-    print(f"Cleaning {len(df):,} documents...")
+    logger.info(f"Cleaning {len(df):,} documents...")
     tqdm.pandas(desc="Cleaning text")
     df["document_clean"] = df["document"].progress_apply(clean_text)
 
@@ -49,9 +50,13 @@ def load_and_clean(sample=None):
         df = df.sample(sample, random_state=42)
     if not PROCESSED_DATA_DIR.exists():
         PROCESSED_DATA_DIR.mkdir(parents=True)
-        
+    logger.info(f"Saving processed data with shape: {df.shape}")
+
+    df_train, df_test = train_test_split(df, test_size=0.2, random_state=42)
+    df_train.to_parquet(PROCESSED_DATA_DIR / "reviews_train.parquet", index=False)
+    df_test.to_parquet(PROCESSED_DATA_DIR / "reviews_test.parquet", index=False)
     df.to_parquet(PROCESSED_DATA_DIR / "reviews.parquet", index=False)
-    print(f"Saved {len(df)} clean reviews.")
+    logger.info(f"Saved {len(df)} clean reviews.")
     return df
 
 
