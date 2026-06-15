@@ -3,7 +3,10 @@ import os
 from os import path
 from pathlib import Path
 from sys import path
-
+from sklearn.utils import resample
+from sklearn.model_selection import StratifiedKFold
+from sklearn.utils.class_weight import compute_class_weight
+import numpy as np
 import hydra
 import mlflow
 import pandas as pd
@@ -48,130 +51,145 @@ class ReviewDataset(Dataset):
         }
 
 
-def load_data(sample=50_000):
+def load_data(sample=50_000, fold=0, n_splits=5):
     df = pd.read_parquet(PROCESSED_DATA_DIR / "reviews_train.parquet")[
-        ["Text", "Score"]
+        ["Text", "sentiment"]
     ].dropna()
-    df["label"] = df["Score"].map({1: 0, 2: 0, 3: 1, 4: 2, 5: 2})
+
+    # ── Drop neutral ───────────────────────────────────────
+    df = df[df["sentiment"] != "neutral"]
+
+    label_map = {"negative": 0, "positive": 1}
+    df["label"] = df["sentiment"].map(label_map)
+
     if sample:
         df = df.sample(sample, random_state=42)
-    return df["Text"].tolist(), df["label"].tolist()
 
+    # ── Undersample majority class ─────────────────────────
+    df_neg = df[df["label"] == 0]
+    df_pos = df[df["label"] == 1]
+
+    min_count = min(len(df_neg), len(df_pos))
+
+    df_balanced = pd.concat([
+        resample(df_neg, n_samples=min_count, random_state=42),
+        resample(df_pos, n_samples=min_count, random_state=42),
+    ]).sample(frac=1, random_state=42).reset_index(drop=True)
+
+    # ── Stratified K-Fold ──────────────────────────────────
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    splits = list(skf.split(df_balanced["Text"], df_balanced["label"]))
+    train_idx, val_idx = splits[fold]
+
+    train_df = df_balanced.iloc[train_idx]
+    val_df   = df_balanced.iloc[val_idx]
+
+    return (
+        train_df["Text"].tolist(), train_df["label"].tolist(),
+        val_df["Text"].tolist(),   val_df["label"].tolist(),
+    )
 
 @hydra.main(config_path="../../config", config_name="config")
 def train(cfg: DictConfig):
-    """Train a BERT model for sentiment classification."""
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    texts, labels = load_data(sample=cfg.model.sample_size)
-
-    # Load tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_name)
 
-    split = int(len(texts) * cfg.model.train_split)
+    for fold in range(cfg.model.n_splits):
+        logger.info(f"Training fold {fold + 1}/{cfg.model.n_splits}")
 
-    train_dl = DataLoader(
-        ReviewDataset(texts[:split], labels[:split], tokenizer, cfg.model.max_length),
-        batch_size=cfg.model.batch_size,
-        shuffle=True,
-    )
+        train_texts, train_labels, val_texts, val_labels = load_data(
+            sample=cfg.model.sample_size,
+            fold=fold,
+            n_splits=cfg.model.n_splits,
+        )
 
-    val_dl = DataLoader(
-        ReviewDataset(texts[split:], labels[split:], tokenizer, cfg.model.max_length),
-        batch_size=cfg.model.batch_size,
-        shuffle=False,
-    )
+        class_weights = compute_class_weight(
+            class_weight="balanced",
+            classes=np.array([0, 1]),
+            y=train_labels,
+        )
+        loss_fn = torch.nn.CrossEntropyLoss(
+            weight=torch.tensor(class_weights, dtype=torch.float).to(device)
+        )
 
-    logger.info(
-        f"Initializing model {cfg.model.model_name} with {cfg.model.num_labels} labels."
-    )
-    model = AutoModelForSequenceClassification.from_pretrained(
-        cfg.model.model_name, num_labels=cfg.model.num_labels
-    )
-    optimizer = AdamW(model.parameters(), lr=cfg.model.learning_rate)
-    scheduler = get_scheduler(
-        "linear",
-        optimizer=optimizer,
-        num_warmup_steps=0,
-        num_training_steps=cfg.model.epochs * len(train_dl),
-    )
+        train_dl = DataLoader(
+            ReviewDataset(train_texts, train_labels, tokenizer, cfg.model.max_length),
+            batch_size=cfg.model.batch_size,
+            shuffle=True,
+        )
+        val_dl = DataLoader(
+            ReviewDataset(val_texts, val_labels, tokenizer, cfg.model.max_length),
+            batch_size=cfg.model.batch_size,
+            shuffle=False,
+        )
 
-    with mlflow.start_run(run_name="bert-sentiment"):
-        mlflow.log_params(
-            {
-                "model_name": cfg.model.model_name,
-                "epochs": cfg.model.epochs,
-                "batch_size": cfg.model.batch_size,
+        model = AutoModelForSequenceClassification.from_pretrained(
+            cfg.model.model_name, num_labels=cfg.model.num_labels
+        ).to(device)
+
+        optimizer = AdamW(model.parameters(), lr=cfg.model.learning_rate)
+        scheduler = get_scheduler(
+            "linear",
+            optimizer=optimizer,
+            num_warmup_steps=0,
+            num_training_steps=cfg.model.epochs * len(train_dl),
+        )
+
+        with mlflow.start_run(run_name=f"bert-sentiment-fold-{fold + 1}"):
+            mlflow.log_params({
+                "model_name":    cfg.model.model_name,
+                "epochs":        cfg.model.epochs,
+                "batch_size":    cfg.model.batch_size,
                 "learning_rate": cfg.model.learning_rate,
-                "max_length": cfg.model.max_length,
-                "sample_size": cfg.model.sample_size,
-            }
-        )
-        logger.info(
-            f"Starting training for {cfg.model.epochs} epochs on {len(train_dl)} batches per epoch."
-        )
-        for epoch in range(cfg.model.epochs):
-            # ── Training loop ──
-            model.train()
-            total_loss = 0
-            for batch in tqdm(train_dl, desc=f"Training Epoch {epoch+1}"):
-                batch = {k: v.to(device) for k, v in batch.items()}
-                loss = model(**batch).loss
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
-                total_loss += loss.item()
+                "max_length":    cfg.model.max_length,
+                "sample_size":   cfg.model.sample_size,
+                "fold":          fold + 1,
+                "n_splits":      cfg.model.n_splits,
+            })
 
-            avg_train_loss = total_loss / len(train_dl)
-
-            # ── Validation loop ──
-
-            model.eval()
-            correct = total = 0
-            with torch.no_grad():
-                for batch in tqdm(val_dl, desc=f"Validation Epoch {epoch+1}"):
+            for epoch in range(cfg.model.epochs):
+                model.train()
+                total_loss = 0
+                for batch in tqdm(train_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Train"):
                     batch = {k: v.to(device) for k, v in batch.items()}
-                    preds = model(**batch).logits.argmax(dim=-1)
-                    correct += (preds == batch["labels"]).sum().item()
-                    total += batch["labels"].size(0)
+                    outputs = model(**batch)
+                    loss = loss_fn(outputs.logits, batch["labels"])
+                    loss.backward()
+                    optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                    total_loss += loss.item()
 
-            avg_val_accuracy = correct / total
-            mlflow.log_metrics(
-                {
-                    f"train_loss_epoch_{epoch+1}": avg_train_loss,
+                avg_train_loss = total_loss / len(train_dl)
+
+                model.eval()
+                correct = total = 0
+                with torch.no_grad():
+                    for batch in tqdm(val_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Val"):
+                        batch = {k: v.to(device) for k, v in batch.items()}
+                        preds = model(**batch).logits.argmax(dim=-1)
+                        correct += (preds == batch["labels"]).sum().item()
+                        total += batch["labels"].size(0)
+
+                avg_val_accuracy = correct / total
+                mlflow.log_metrics({
+                    f"train_loss_epoch_{epoch+1}":   avg_train_loss,
                     f"val_accuracy_epoch_{epoch+1}": avg_val_accuracy,
-                },
-                step=epoch,
+                }, step=epoch)
+
+                logger.info(
+                    f"Fold {fold+1} | Epoch {epoch+1}/{cfg.model.epochs} | "
+                    f"Loss: {avg_train_loss:.4f} | Acc: {avg_val_accuracy:.4f}"
+                )
+
+            # Save best fold model
+            model.save_pretrained(MODELS_DIR / f"bert-sentiment-fold-{fold+1}")
+            tokenizer.save_pretrained(MODELS_DIR / f"bert-sentiment-fold-{fold+1}")
+            mlflow.log_artifacts(
+                str(MODELS_DIR / f"bert-sentiment-fold-{fold+1}"),
+                artifact_path=f"bert-sentiment-fold-{fold+1}"
             )
-            logger.info(
-                f"Epoch {epoch+1}/{cfg.model.epochs} - "
-                f"Train Loss: {avg_train_loss:.4f}, "
-                f"Val Accuracy: {avg_val_accuracy:.4f}"
-            )
-        logger.success("Training completed. Saving model and tokenizer...")
-        model.save_pretrained(MODELS_DIR / "bert-sentiment")
-        tokenizer.save_pretrained(MODELS_DIR / "bert-sentiment")
-        mlflow.log_artifacts(
-            str(MODELS_DIR / "bert-sentiment"), artifact_path="bert-sentiment"
-        )
-        reports_dir = Path("reports/bert")
-        reports_dir.mkdir(parents=True, exist_ok=True)
-
-        metrics = {
-            "val_acc": avg_val_accuracy,
-            "train_loss": avg_train_loss,
-            "epochs": cfg.model.epochs,
-            "model_name": cfg.model.model_name,
-        }
-
-        metrics_path = reports_dir / "metrics_bert.json"
-        with open(metrics_path, "w") as f:
-            json.dump(metrics, f, indent=2)
-
-        mlflow.log_artifacts(str(reports_dir), artifact_path="reports/bert")
-        logger.success(f"Model saved to {MODELS_DIR / 'bert-sentiment'}")
-
+            logger.success(f"Fold {fold+1} complete and saved.")
 
 if __name__ == "__main__":
     train()

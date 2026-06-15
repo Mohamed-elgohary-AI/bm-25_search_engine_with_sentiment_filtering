@@ -1,0 +1,4 @@
+[core]
+    remote = dagshub
+['remote "dagshub"']
+    url = https://dagshub.com/mohamedabdelmonemelgohary/bm-25_search_engine_with_sentiment_filtering.dvc

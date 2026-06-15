@@ -51,7 +51,7 @@ stages:
     outs:
     - path: models/bm25_index.pkl
       hash: md5
-      md5: c9517850f6adf6ab590cd1af8dc0da71
+      md5: 047f84d376460c10ef523366e8343ca5
       size: 344563916
     - path: reports/metrics.json
       hash: md5
@@ -67,10 +67,10 @@ stages:
   train_bert:
     cmd: uv run python -m src.modeling.train model=bert
     deps:
-    - path: data/processed/reviews.parquet
+    - path: data/processed/reviews_train.parquet
       hash: md5
-      md5: 210f285be2fb5af393ef1cd2c511dd4c
-      size: 288899090
+      md5: 4dece810e15cbf3bea882aa9d6809036
+      size: 243362685
     params:
       config/model/bert.yaml:
         batch_size: 32
@@ -84,6 +84,6 @@ stages:
     outs:
     - path: models/bert-sentiment
       hash: md5
-      md5: a2d0fc481ea1055f3612e9ab189f2b2f.dir
-      size: 18262800
+      md5: 224e675d3f3b6aebac3dde7b309df6b0.dir
+      size: 18262746
       nfiles: 4

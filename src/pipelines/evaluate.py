@@ -22,27 +22,29 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from src.config import MODELS_DIR, PROCESSED_DATA_DIR, REPORTS_DIR
 from src.modeling.train import ReviewDataset
 
-LABELS = ["negative", "neutral", "positive"]
+LABELS = ["negative", "positive"]
 METRICS_DIR = REPORTS_DIR / "bert"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
 
 def load_data(path: str, sample: int, tokenizer, max_len: int):
-    df = pd.read_parquet(path)[["Text", "Score"]].dropna()
-    df["label"] = df["Score"].map({1: 0, 2: 0, 3: 1, 4: 2, 5: 2})
-    if sample:
-        df = df.sample(sample, random_state=42)
-    _, val_texts = (
-        df["Text"].tolist()[: int(len(df) * 0.9)],
-        df["Text"].tolist()[int(len(df) * 0.9) :],
-    )
-    _, val_labels = (
-        df["label"].tolist()[: int(len(df) * 0.9)],
-        df["label"].tolist()[int(len(df) * 0.9) :],
-    )
+    df = pd.read_parquet(PROCESSED_DATA_DIR / "reviews_test.parquet")[
+        ["Text", "sentiment"]
+    ].dropna()
+
+    df = df[df["sentiment"] != "neutral"]
+
+    label_map = {"negative": 0, "positive": 1}
+    df["label"] = df["sentiment"].map(label_map)
+
+   # if sample:
+     #   df = df.sample(sample, random_state=42)
+
+    val_texts  = df["Text"].tolist()
+    val_labels = df["label"].tolist()
+
     dataset = ReviewDataset(val_texts, val_labels, tokenizer, max_len)
     return DataLoader(dataset, batch_size=32)
-
 
 def plot_confusion_matrix(cm: np.ndarray):
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -67,22 +69,21 @@ def plot_confusion_matrix(cm: np.ndarray):
 
 
 def plot_roc_curves(all_labels: list, all_probs: np.ndarray):
-    y_bin = label_binarize(all_labels, classes=[0, 1, 2])
     fig, ax = plt.subplots(figsize=(8, 6))
-    for i, label in enumerate(LABELS):
-        fpr, tpr, _ = roc_curve(y_bin[:, i], all_probs[:, i])
-        roc_auc = auc(fpr, tpr)
-        ax.plot(fpr, tpr, label=f"{label} (AUC = {roc_auc:.2f})")
+    
+    fpr, tpr, _ = roc_curve(all_labels, all_probs[:, 1])  # prob of positive class
+    roc_auc = auc(fpr, tpr)
+    ax.plot(fpr, tpr, label=f"ROC curve (AUC = {roc_auc:.2f})")
     ax.plot([0, 1], [0, 1], "k--")
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curves")
+    ax.set_title("ROC Curve")
     ax.legend()
     plt.tight_layout()
     path = FIGURES_DIR / "roc_curves.png"
     fig.savefig(path)
     plt.close()
-    logger.info(f"Saved ROC curves → {path}")
+    logger.info(f"Saved ROC curve → {path}")
     return path
 
 
