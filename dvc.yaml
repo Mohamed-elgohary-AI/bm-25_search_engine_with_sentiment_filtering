@@ -58,7 +58,7 @@ stages:
     deps:
     - models/bert-sentiment
     - data/processed/reviews_test.parquet
-    - pipelines/evaluate.py
+    - src/pipelines/evaluate.py
     params:
     - config/model/bert.yaml:
       - model_name
