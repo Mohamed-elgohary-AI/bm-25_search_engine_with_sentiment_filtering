@@ -1,14 +1,33 @@
-# docker-compose.yml
+version: "3.9"
+
 services:
-  search-api:
+  app:
     build: .
-    ports: ["8000:8000"]
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
     volumes:
-      - ./artifacts:/app/artifacts
+      - .:/app
+    depends_on:
+      - mlflow
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.11.3
-    ports: ["5000:5000"]
-    command: mlflow server --host 0.0.0.0
+    image: python:3.11-slim
+    working_dir: /mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      bash -c "pip install mlflow &&
+               mlflow server
+               --host 0.0.0.0
+               --port 5000
+               --backend-store-uri sqlite:///mlflow.db
+               --default-artifact-root /mlruns"
     volumes:
-      - ./mlruns:/mlruns
+      - mlruns:/mlruns
+      - mlflow_db:/mlflow
+
+volumes:
+  mlruns:
+  mlflow_db:

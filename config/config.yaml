@@ -2,6 +2,8 @@ defaults:
 #make multiple datasets in the config/data directory
 - data: [amzn, sent140]
 - model: bm25
+mlflow:
+  experiment_name: bert-sentiment
 paths:
 model_path: model/
 reports_path: reports

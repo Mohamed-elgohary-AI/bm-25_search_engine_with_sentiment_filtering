@@ -1,4 +1,5 @@
 import json
+import copy
 import os
 from os import path
 from pathlib import Path
@@ -6,6 +7,7 @@ from sys import path
 from sklearn.utils import resample
 from sklearn.model_selection import StratifiedKFold
 from sklearn.utils.class_weight import compute_class_weight
+import dagshub
 import numpy as np
 import hydra
 import mlflow
@@ -25,7 +27,9 @@ from transformers import (
 
 from src.config import MODELS_DIR, PROCESSED_DATA_DIR
 from src.preprocessor import clean_text
+from dotenv import load_dotenv
 
+load_dotenv()
 app = typer.Typer()
 
 
@@ -88,11 +92,22 @@ def load_data(sample=50_000, fold=0, n_splits=5):
         train_df["Text"].tolist(), train_df["label"].tolist(),
         val_df["Text"].tolist(),   val_df["label"].tolist(),
     )
-
 @hydra.main(config_path="../../config", config_name="config")
 def train(cfg: DictConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_name)
+
+    dagshub.init(
+        repo_owner="mohamedabdelmonemelgohary",
+        repo_name="bm-25_search_engine_with_sentiment_filtering",
+        mlflow=True,
+    )
+    mlflow.set_experiment(cfg.mlflow.experiment_name)
+
+    # ── Initialize best fold tracking ─────────────────────
+    best_val_accuracy = 0
+    best_fold = None
+    best_model_state = None
 
     for fold in range(cfg.model.n_splits):
         logger.info(f"Training fold {fold + 1}/{cfg.model.n_splits}")
@@ -111,7 +126,7 @@ def train(cfg: DictConfig):
         loss_fn = torch.nn.CrossEntropyLoss(
             weight=torch.tensor(class_weights, dtype=torch.float).to(device)
         )
-
+        
         train_dl = DataLoader(
             ReviewDataset(train_texts, train_labels, tokenizer, cfg.model.max_length),
             batch_size=cfg.model.batch_size,
@@ -182,14 +197,24 @@ def train(cfg: DictConfig):
                     f"Loss: {avg_train_loss:.4f} | Acc: {avg_val_accuracy:.4f}"
                 )
 
-            # Save best fold model
-            model.save_pretrained(MODELS_DIR / f"bert-sentiment-fold-{fold+1}")
-            tokenizer.save_pretrained(MODELS_DIR / f"bert-sentiment-fold-{fold+1}")
-            mlflow.log_artifacts(
-                str(MODELS_DIR / f"bert-sentiment-fold-{fold+1}"),
-                artifact_path=f"bert-sentiment-fold-{fold+1}"
-            )
-            logger.success(f"Fold {fold+1} complete and saved.")
+            # ── Track best fold ────────────────────────────
+            if avg_val_accuracy > best_val_accuracy:
+                best_val_accuracy = avg_val_accuracy
+                best_fold = fold + 1
+                best_model_state = copy.deepcopy(model.state_dict())
+                logger.success(f"New best fold: {fold+1} with val_accuracy: {avg_val_accuracy:.4f}")
+
+    # ── Save best fold only — OUTSIDE the loop ────────────
+    logger.success(f"Best fold: {best_fold} with val_accuracy: {best_val_accuracy:.4f}")
+    model.load_state_dict(best_model_state)
+    model.save_pretrained(MODELS_DIR / "bert-sentiment")
+    tokenizer.save_pretrained(MODELS_DIR / "bert-sentiment")
+    mlflow.log_artifacts(
+        str(MODELS_DIR / "bert-sentiment"), artifact_path="bert-sentiment"
+    )
+    logger.success(f"Best model (fold {best_fold}) saved to {MODELS_DIR / 'bert-sentiment'}")
+
+
 
 if __name__ == "__main__":
     train()

@@ -14,6 +14,7 @@ stages:
     deps:
     - data/raw/Reviews.csv
     - data/raw/training.1600000.processed.noemoticon.csv
+    - src/preprocessor.py
     outs:
     - data/processed/reviews.parquet
     - data/processed/reviews_train.parquet
@@ -24,6 +25,7 @@ stages:
     cmd: uv run python -m src.pipelines.build_index model=bm25
     deps:
     - data/processed/reviews.parquet
+    - src/pipelines/build_index.py
     outs:
     - models/bm25_index.pkl
     params:
@@ -37,6 +39,7 @@ stages:
     cmd: uv run python -m src.modeling.train model=bert
     deps:
     - data/processed/reviews_train.parquet
+    - src/modeling/train.py
     params:
     - config/model/bert.yaml:
       - model_name
@@ -55,6 +58,7 @@ stages:
     deps:
     - models/bert-sentiment
     - data/processed/reviews_test.parquet
+    - pipelines/evaluate.py
     params:
     - config/model/bert.yaml:
       - model_name
@@ -66,4 +70,4 @@ stages:
       - sample_size
       - train_split
     metrics:
-    - reports/metrics_bert.json
+    - reports/bert/metrics_bert.json

@@ -1,3 +1,10 @@
+# Project specific
+models/
+reports/
+notebooks/
+mlflow.db
+.dvc/tmp/
+.dvc/cache/
 # Data
 /data/
 /outputs/

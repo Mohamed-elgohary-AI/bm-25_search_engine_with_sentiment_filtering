@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-# import dagshub
+import dagshub
 import hydra
 import matplotlib.pyplot as plt
 import mlflow
@@ -21,7 +21,8 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from src.config import MODELS_DIR, PROCESSED_DATA_DIR, REPORTS_DIR
 from src.modeling.train import ReviewDataset
-
+from dotenv import load_dotenv
+load_dotenv()
 LABELS = ["negative", "positive"]
 METRICS_DIR = REPORTS_DIR / "bert"
 FIGURES_DIR = REPORTS_DIR / "figures"
@@ -132,11 +133,12 @@ def evaluate(cfg: DictConfig):
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    # dagshub.init(
-    #     repo_owner=cfg.dagshub.username,
-    #     repo_name=cfg.dagshub.repo_name,
-    #     mlflow=True,
-    # )
+    dagshub.init(
+        repo_owner="mohamedabdelmonemelgohary",
+        repo_name="bm-25_search_engine_with_sentiment_filtering",
+        mlflow=True,
+    )
+    mlflow.set_experiment(cfg.mlflow.experiment_name)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(MODELS_DIR / "bert-sentiment")
@@ -185,6 +187,8 @@ def evaluate(cfg: DictConfig):
     }
 
     metrics_path = METRICS_DIR / "metrics_bert.json"
+    
+
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
     logger.success(f"Metrics saved → {metrics_path}")
