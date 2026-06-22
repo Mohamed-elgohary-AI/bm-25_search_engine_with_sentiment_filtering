@@ -20,17 +20,14 @@ stages:
       hash: md5
       md5: c3c950ae0be8b0736477c89d052d33fd
       size: 300904694
-      isexec: true
     - path: data/raw/training.1600000.processed.noemoticon.csv
       hash: md5
       md5: df952449d6f9b5f9fdfe3fc53ddef7ca
       size: 238803811
-      isexec: true
     - path: src/preprocessor.py
       hash: md5
-      md5: 8189c1b6df65ec995537c5343bc1af1d
-      size: 2486
-      isexec: true
+      md5: b88e9f2f46045003286a402f60b007e2
+      size: 2557
     outs:
     - path: data/processed/reviews.parquet
       hash: md5
@@ -53,9 +50,8 @@ stages:
       size: 288899090
     - path: src/pipelines/build_index.py
       hash: md5
-      md5: 9d634dcc9cd1a6c6093e986d6131af6f
-      size: 2235
-      isexec: true
+      md5: a917338f99a4a0037a3eb0930946485a
+      size: 2306
     params:
       config/model/bm25.yaml:
         b: 0.75
@@ -63,7 +59,7 @@ stages:
     outs:
     - path: models/bm25_index.pkl
       hash: md5
-      md5: 047f84d376460c10ef523366e8343ca5
+      md5: c9517850f6adf6ab590cd1af8dc0da71
       size: 344563916
     - path: reports/metrics.json
       hash: md5
@@ -85,24 +81,23 @@ stages:
       size: 243362685
     - path: src/modeling/train.py
       hash: md5
-      md5: 108886b1df739cd25e4ffeb16b45e9fb
-      size: 8116
-      isexec: true
+      md5: df7c7dce36710965e611f486658f79f0
+      size: 9210
     params:
       config/model/bert.yaml:
-        batch_size: 32
-        epochs: 1
-        learning_rate: 1e-05
-        max_length: 256
-        model_name: google/bert_uncased_L-2_H-128_A-2
+        batch_size: 128
+        epochs: 3
+        learning_rate: 2e-05
+        max_length: 128
+        model_name: distilbert-base-uncased
         num_labels: 2
-        sample_size: 75000
-        train_split: 0.8
+        sample_size: 50000
+        train_split: 0.9
     outs:
     - path: models/bert-sentiment
       hash: md5
-      md5: 8bdf00473b25d8ab92264fb18176d0cc.dir
-      size: 18262076
+      md5: c7c5f5dd8ed80d542fa4ddca6b0db147.dir
+      size: 268545244
       nfiles: 4
   evaluate_bert:
     cmd: uv run python -m src.pipelines.evaluate model=bert
@@ -111,24 +106,27 @@ stages:
       hash: md5
       md5: bb32a1ef86bfe9f4adcf936058040710
       size: 61091673
-      isexec: true
     - path: models/bert-sentiment
       hash: md5
-      md5: 0b3a91703f230604632b17b5058b576e.dir
-      size: 18262076
+      md5: c7c5f5dd8ed80d542fa4ddca6b0db147.dir
+      size: 268545244
       nfiles: 4
+    - path: src/pipelines/evaluate.py
+      hash: md5
+      md5: c8e34b3a8eacc1f7ca1d890182ce1811
+      size: 7907
     params:
       config/model/bert.yaml:
-        batch_size: 32
-        epochs: 1
-        learning_rate: 1e-05
-        max_length: 256
-        model_name: google/bert_uncased_L-2_H-128_A-2
+        batch_size: 128
+        epochs: 3
+        learning_rate: 2e-05
+        max_length: 128
+        model_name: distilbert-base-uncased
         num_labels: 2
-        sample_size: 75000
-        train_split: 0.8
+        sample_size: 50000
+        train_split: 0.9
     outs:
     - path: reports/bert/metrics_bert.json
       hash: md5
-      md5: 5a6fd2e2f268d379fd71ae0008ff1efd
-      size: 782
+      md5: 2ca163a8a3d1efe0e70baf87ba532581
+      size: 895

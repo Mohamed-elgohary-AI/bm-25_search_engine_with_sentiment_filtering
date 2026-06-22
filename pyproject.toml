@@ -51,6 +51,9 @@ requires-python = "~=3.13.0"
 [tool.flit.module]
 name = "src"
 
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu130"
+
 [tool.ruff]
 line-length = 99
 src = ["src"]

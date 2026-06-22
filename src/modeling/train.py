@@ -1,21 +1,23 @@
-import json
 import copy
+import json
 import os
 from os import path
 from pathlib import Path
 from sys import path
-from sklearn.utils import resample
-from sklearn.model_selection import StratifiedKFold
-from sklearn.utils.class_weight import compute_class_weight
+
 import dagshub
-import numpy as np
 import hydra
 import mlflow
+import numpy as np
 import pandas as pd
 import torch
 import typer
+from dotenv import load_dotenv
 from loguru import logger
 from omegaconf import DictConfig
+from sklearn.model_selection import StratifiedKFold
+from sklearn.utils import resample
+from sklearn.utils.class_weight import compute_class_weight
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -27,7 +29,6 @@ from transformers import (
 
 from src.config import MODELS_DIR, PROCESSED_DATA_DIR
 from src.preprocessor import clean_text
-from dotenv import load_dotenv
 
 load_dotenv()
 app = typer.Typer()
@@ -75,10 +76,16 @@ def load_data(sample=50_000, fold=0, n_splits=5):
 
     min_count = min(len(df_neg), len(df_pos))
 
-    df_balanced = pd.concat([
-        resample(df_neg, n_samples=min_count, random_state=42),
-        resample(df_pos, n_samples=min_count, random_state=42),
-    ]).sample(frac=1, random_state=42).reset_index(drop=True)
+    df_balanced = (
+        pd.concat(
+            [
+                resample(df_neg, n_samples=min_count, random_state=42),
+                resample(df_pos, n_samples=min_count, random_state=42),
+            ]
+        )
+        .sample(frac=1, random_state=42)
+        .reset_index(drop=True)
+    )
 
     # ── Stratified K-Fold ──────────────────────────────────
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
@@ -86,13 +93,17 @@ def load_data(sample=50_000, fold=0, n_splits=5):
     train_idx, val_idx = splits[fold]
 
     train_df = df_balanced.iloc[train_idx]
-    val_df   = df_balanced.iloc[val_idx]
+    val_df = df_balanced.iloc[val_idx]
 
     return (
-        train_df["Text"].tolist(), train_df["label"].tolist(),
-        val_df["Text"].tolist(),   val_df["label"].tolist(),
+        train_df["Text"].tolist(),
+        train_df["label"].tolist(),
+        val_df["Text"].tolist(),
+        val_df["label"].tolist(),
     )
-@hydra.main(config_path="../../config", config_name="config")
+
+
+@hydra.main(config_path="../../config", config_name="config", version_base=None)
 def train(cfg: DictConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_name)
@@ -126,16 +137,20 @@ def train(cfg: DictConfig):
         loss_fn = torch.nn.CrossEntropyLoss(
             weight=torch.tensor(class_weights, dtype=torch.float).to(device)
         )
-        
+
         train_dl = DataLoader(
             ReviewDataset(train_texts, train_labels, tokenizer, cfg.model.max_length),
             batch_size=cfg.model.batch_size,
             shuffle=True,
+            num_workers=0,
+            pin_memory=True,
         )
         val_dl = DataLoader(
             ReviewDataset(val_texts, val_labels, tokenizer, cfg.model.max_length),
             batch_size=cfg.model.batch_size,
             shuffle=False,
+            num_workers=0,
+            pin_memory=True,
         )
 
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -151,21 +166,25 @@ def train(cfg: DictConfig):
         )
 
         with mlflow.start_run(run_name=f"bert-sentiment-fold-{fold + 1}"):
-            mlflow.log_params({
-                "model_name":    cfg.model.model_name,
-                "epochs":        cfg.model.epochs,
-                "batch_size":    cfg.model.batch_size,
-                "learning_rate": cfg.model.learning_rate,
-                "max_length":    cfg.model.max_length,
-                "sample_size":   cfg.model.sample_size,
-                "fold":          fold + 1,
-                "n_splits":      cfg.model.n_splits,
-            })
+            mlflow.log_params(
+                {
+                    "model_name": cfg.model.model_name,
+                    "epochs": cfg.model.epochs,
+                    "batch_size": cfg.model.batch_size,
+                    "learning_rate": cfg.model.learning_rate,
+                    "max_length": cfg.model.max_length,
+                    "sample_size": cfg.model.sample_size,
+                    "fold": fold + 1,
+                    "n_splits": cfg.model.n_splits,
+                }
+            )
 
             for epoch in range(cfg.model.epochs):
                 model.train()
                 total_loss = 0
-                for batch in tqdm(train_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Train"):
+                for batch in tqdm(
+                    train_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Train"
+                ):
                     batch = {k: v.to(device) for k, v in batch.items()}
                     outputs = model(**batch)
                     loss = loss_fn(outputs.logits, batch["labels"])
@@ -180,17 +199,22 @@ def train(cfg: DictConfig):
                 model.eval()
                 correct = total = 0
                 with torch.no_grad():
-                    for batch in tqdm(val_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Val"):
+                    for batch in tqdm(
+                        val_dl, desc=f"Fold {fold+1} Epoch {epoch+1} Val"
+                    ):
                         batch = {k: v.to(device) for k, v in batch.items()}
                         preds = model(**batch).logits.argmax(dim=-1)
                         correct += (preds == batch["labels"]).sum().item()
                         total += batch["labels"].size(0)
 
                 avg_val_accuracy = correct / total
-                mlflow.log_metrics({
-                    f"train_loss_epoch_{epoch+1}":   avg_train_loss,
-                    f"val_accuracy_epoch_{epoch+1}": avg_val_accuracy,
-                }, step=epoch)
+                mlflow.log_metrics(
+                    {
+                        f"train_loss_epoch_{epoch+1}": avg_train_loss,
+                        f"val_accuracy_epoch_{epoch+1}": avg_val_accuracy,
+                    },
+                    step=epoch,
+                )
 
                 logger.info(
                     f"Fold {fold+1} | Epoch {epoch+1}/{cfg.model.epochs} | "
@@ -202,18 +226,29 @@ def train(cfg: DictConfig):
                 best_val_accuracy = avg_val_accuracy
                 best_fold = fold + 1
                 best_model_state = copy.deepcopy(model.state_dict())
-                logger.success(f"New best fold: {fold+1} with val_accuracy: {avg_val_accuracy:.4f}")
+                logger.success(
+                    f"New best fold: {fold+1} with val_accuracy: {avg_val_accuracy:.4f}"
+                )
 
     # ── Save best fold only — OUTSIDE the loop ────────────
+
     logger.success(f"Best fold: {best_fold} with val_accuracy: {best_val_accuracy:.4f}")
     model.load_state_dict(best_model_state)
     model.save_pretrained(MODELS_DIR / "bert-sentiment")
     tokenizer.save_pretrained(MODELS_DIR / "bert-sentiment")
-    mlflow.log_artifacts(
-        str(MODELS_DIR / "bert-sentiment"), artifact_path="bert-sentiment"
-    )
-    logger.success(f"Best model (fold {best_fold}) saved to {MODELS_DIR / 'bert-sentiment'}")
 
+    with mlflow.start_run(run_name="bert-sentiment-best"):
+        mlflow.log_params(
+            {"best_fold": best_fold, "best_val_accuracy": best_val_accuracy}
+        )
+        # ── Upload artifacts with progress bar ────────────
+        artifact_files = list((MODELS_DIR / "bert-sentiment").iterdir())
+        for file in tqdm(artifact_files, desc="Uploading model to DagsHub"):
+            mlflow.log_artifact(str(file), artifact_path="bert-sentiment")
+
+    logger.success(
+        f"Best model (fold {best_fold}) saved to {MODELS_DIR / 'bert-sentiment'}"
+    )
 
 
 if __name__ == "__main__":

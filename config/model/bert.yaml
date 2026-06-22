@@ -1,10 +1,10 @@
-model_name: google/bert_uncased_L-2_H-128_A-2
+model_name: distilbert-base-uncased
 num_labels: 2
-max_length: 256
-batch_size: 32    
-epochs: 1   
-learning_rate: 1e-5
-train_split: 0.8
-sample_size: 75000
-n_splits: 3     
+max_length: 128      # down from 256
+batch_size: 128      # bigger batch = fewer steps = faster
+epochs: 3            
+learning_rate: 2e-5  
+train_split: 0.9     
+sample_size: 50000   # down from 300000
+n_splits: 3          # down from 5
 fold: 0
