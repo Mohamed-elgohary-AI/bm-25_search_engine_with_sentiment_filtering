@@ -1,6 +1,0 @@
-outs:
-- md5: ada5e243d4af13b518005b5a8930e65b.dir
-  size: 18262076
-  nfiles: 4
-  hash: md5
-  path: bert-sentiment-fold-1
