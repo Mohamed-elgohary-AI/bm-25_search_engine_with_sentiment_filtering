@@ -8,6 +8,7 @@ from src.api import state
 from src.api.schemas import SearchResponse, SentimentRequest, SentimentResponse
 from src.pipelines.search import SearchPipeline
 from src.pipelines.sentiment_inference import SentimentPipeline
+from src.pipelines.summarizer import ReviewSummarizer
 
 shared_search_pipeline = None
 
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
     print("Loading AI models into memory...")
     state.sentiment_pipeline = SentimentPipeline()
     state.pipeline = SearchPipeline()
+    state.summarizer = ReviewSummarizer()
 
     yield
     print("Shutting down...")
@@ -40,16 +42,18 @@ def search(
 ):
     start = time.perf_counter()
 
-    # ✅ Use optimized pipeline (BM25 + metadata only)
     results = state.pipeline.search(q, top_k=top_k, sentiment_filter=sentiment)
 
     latency_ms = (time.perf_counter() - start) * 1000
-
+    summary = None
+    if results and state.summarizer:
+        summary = state.summarizer.summarize(q, results)
     return {
         "query": q,
         "sentiment_filter": sentiment,
         "latency_ms": round(latency_ms, 2),
         "num_results": len(results),
+        "summary": summary,
         "results": results,
     }
 

@@ -37,4 +37,5 @@ class SearchResponse(BaseModel):
     )
     latency_ms: float
     num_results: int
+    summary: Optional[str] = None
     results: List[SearchResult]

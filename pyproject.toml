@@ -30,6 +30,7 @@ dependencies = [
     "nltk>=3.9.4",
     "notebook",
     "numpy",
+    "ollama>=0.6.2",
     "pandas",
     "pip",
     "pyarrow>=24.0.0",

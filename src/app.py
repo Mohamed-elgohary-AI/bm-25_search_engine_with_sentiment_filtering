@@ -1,18 +1,43 @@
-import streamlit as st
-from src.pipelines.search import SearchPipeline
 import time
+
+import streamlit as st
+
+# Import your global state file and pipelines
+import src.api.state as state
+from src.pipelines.search import SearchPipeline
+from src.pipelines.sentiment_inference import SentimentPipeline
+from src.pipelines.summarizer import ReviewSummarizer
+
 st.set_page_config(
     page_title="Food Review Search",
     page_icon="🍕",
     layout="wide",
 )
 
-# ── Load pipeline once ─────────────────────────────────────
-@st.cache_resource
-def load_pipeline():
-    return SearchPipeline()
 
-pipeline = load_pipeline()
+# ── Load pipelines once & map to global state ────────────────
+@st.cache_resource
+def load_pipelines():
+    """
+    Acts as your application lifespan loader. Runs once, caches
+    the instances globally, and binds them to your state module.
+    """
+    # 1. Instantiate both models
+    sentiment_instance = SentimentPipeline()
+    search_instance = SearchPipeline()
+    summarizer_instance = ReviewSummarizer()
+
+    return sentiment_instance, search_instance, summarizer_instance
+
+
+# Bootstrap the instances
+sentiment_pipe, search_pipe, summarizer_pipe = load_pipelines()
+
+# Bind them back to your state.py module references so internal code doesn't break
+state.sentiment_pipeline = sentiment_pipe
+state.pipeline = search_pipe
+state.summarizer = summarizer_pipe
+
 
 # ── Session state init ─────────────────────────────────────
 if "results" not in st.session_state:
@@ -24,6 +49,12 @@ if "query" not in st.session_state:
 if "sentiment_filter" not in st.session_state:
     st.session_state.sentiment_filter = "All"
 
+if "summary" not in st.session_state:
+    st.session_state.summary = None
+
+if "summarize" not in st.session_state:
+    st.session_state.summarize = False
+
 
 # ── Search function (triggered on every change) ────────────
 def run_search():
@@ -32,23 +63,26 @@ def run_search():
 
     if query.strip() == "":
         st.session_state.results = []
+        st.session_state.summary = None
         return
+
     filter_val = None if sentiment_filter == "All" else sentiment_filter.lower()
-    print(sentiment_filter)
-    print(filter_val)
+
     start = time.perf_counter()
-    results = pipeline.search(
-        query,
-        sentiment_filter=filter_val,
-        top_k=10
-    )
+    results = state.pipeline.search(query, sentiment_filter=filter_val, top_k=10)
     end = time.perf_counter()
+
     st.caption(f"Search took {(end - start) * 1000:.2f} ms")
     st.session_state.results = results
 
+    st.session_state.results = results
+    st.session_state.search_time = (end - start) * 1000
+    st.session_state.summary = None
+
 
 # ── Styling ────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main { max-width: 800px; margin: auto; }
 
@@ -77,13 +111,14 @@ st.markdown("""
     .sentiment-negative { color: #c62828; font-weight: bold; }
     .bm25-score { color: #888; font-size: 0.85rem; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ── Header ─────────────────────────────────────────────────
 st.markdown(
-    '<div class="search-title">🍕 Food Review Search</div>',
-    unsafe_allow_html=True
+    '<div class="search-title">Food Review Search</div>', unsafe_allow_html=True
 )
 
 # ── Search UI ─────────────────────────────────────────────
@@ -95,7 +130,7 @@ with col2:
         key="query",
         placeholder="Search food reviews...",
         label_visibility="collapsed",
-        on_change=run_search
+        on_change=run_search,
     )
 
     st.radio(
@@ -103,17 +138,30 @@ with col2:
         options=["All", "Positive", "Negative"],
         horizontal=True,
         key="sentiment_filter",
-        on_change=run_search
+        on_change=run_search,
+    )
+
+    st.toggle(
+        "Summarize results with Llama",
+        key="summarize",
+        on_change=run_search,
     )
 
 
 # ── Results ────────────────────────────────────────────────
 with col2:
-    
     results = st.session_state.results
 
     if st.session_state.query.strip():
         st.markdown(f"**{len(results)} results** for *{st.session_state.query}*")
+
+        if st.session_state.summarize and results:
+            st.markdown("### AI Summary")
+            with st.container():
+                st.write_stream(
+                    state.summarizer.stream(st.session_state.query, results)
+                )
+            st.divider()
 
         if not results:
             st.info("No results found. Try a different query or filter.")
@@ -122,7 +170,8 @@ with col2:
             sentiment_class = f"sentiment-{r['bert_sentiment']}"
             sentiment_emoji = "✅" if r["bert_sentiment"] == "positive" else "❌"
 
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="result-card">
                 <h5>Product ID:  {r['product_id']}</h5>
                 <p>{r['text'][:900]}...</p>
@@ -136,11 +185,16 @@ with col2:
                     <span>Confidence: {r['bert_confidence']}</span>
                 </p>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
     else:
-        st.markdown("""
+        st.markdown(
+            """
         <div style="text-align:center; color:#888; margin-top:2rem;">
             Search across 500,000+ food reviews
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )

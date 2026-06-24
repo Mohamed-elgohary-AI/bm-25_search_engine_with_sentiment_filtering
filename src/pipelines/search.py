@@ -40,7 +40,7 @@ class SearchPipeline:
 
         return [
             {
-                "score": 0.0, 
+                "score": 0.0,
                 "text": self.corpus[i],
                 "metadata": self.metadata[i],
             }
@@ -48,7 +48,10 @@ class SearchPipeline:
         ]
 
     def search(
-        self, query: str, sentiment_filter: str = None, top_k: int = 10
+        self,
+        query: str,
+        sentiment_filter: str = None,
+        top_k: int = 10,
     ) -> list[dict]:
         if not query.strip():
             return []
@@ -76,7 +79,6 @@ class SearchPipeline:
                         "bert_confidence": sentiment["confidence"],
                     }
                 )
-
         print("BM25:", (t_bm25_end - t_bm25) * 1000)
         print("Sort:", (t_sort_end - t_sort) * 1000)
         print("Filter:", (t_sent_end - t_sent) * 1000)

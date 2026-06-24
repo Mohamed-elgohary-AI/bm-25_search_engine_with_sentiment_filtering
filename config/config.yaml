@@ -2,6 +2,8 @@ defaults:
 #make multiple datasets in the config/data directory
 - data: [amzn, sent140]
 - model: bm25
+summarizer:
+  model: llama3.2
 mlflow:
   experiment_name: bert-sentiment
 paths:
